@@ -6,9 +6,11 @@
 #include <trantor/utils/Logger.h>
 
 #include "hotel/config/AppConfig.hpp"
+#include "hotel/controllers/DisponibilidadController.hpp"
 #include "hotel/controllers/HabitacionController.hpp"
 #include "hotel/controllers/HealthController.hpp"
 #include "hotel/controllers/HuespedController.hpp"
+#include "hotel/controllers/ReporteController.hpp"
 #include "hotel/controllers/ReservacionController.hpp"
 #include "hotel/core/AppContext.hpp"
 #include "hotel/core/ErrorMapper.hpp"
@@ -29,9 +31,11 @@ trantor::Logger::LogLevel toTrantorLogLevel(const std::string& level) {
 
 int main() {
     using hotel::config::AppConfig;
+    using hotel::controllers::DisponibilidadController;
     using hotel::controllers::HabitacionController;
     using hotel::controllers::HealthController;
     using hotel::controllers::HuespedController;
+    using hotel::controllers::ReporteController;
     using hotel::controllers::ReservacionController;
     using hotel::core::AppContext;
     using hotel::core::AppException;
@@ -61,7 +65,7 @@ int main() {
                          "]: el servidor iniciara y /api/v1/health reportara HTTP 503.");
         }
 
-        // 4. Registrar controladores con inyeccion de dependencias
+        // 4. Configurar servidor Drogon y registrar el 100% de controladores REST
         auto& app = drogon::app();
         app.setLogLevel(toTrantorLogLevel(config.logLevel));
         app.setThreadNum(4);
@@ -78,6 +82,9 @@ int main() {
         app.registerController(std::make_shared<HabitacionController>(context.habitacionService()));
         app.registerController(
             std::make_shared<ReservacionController>(context.reservacionService()));
+        app.registerController(
+            std::make_shared<DisponibilidadController>(context.disponibilidadService()));
+        app.registerController(std::make_shared<ReporteController>(context.reporteService()));
 
         Logger::info("Servidor HTTP Drogon escuchando en http://" + config.serverHost + ":" +
                      std::to_string(config.serverPort) + "/api/v1");

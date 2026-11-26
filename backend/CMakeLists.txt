@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(hotel_backend
-    VERSION 0.1.0
+    VERSION 1.0.0
     LANGUAGES CXX
 )
 
@@ -27,32 +27,49 @@ find_package(mongocxx CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 
 # Libreria interna del backend (reutilizable en hotel_api y pruebas GoogleTest)
-add_library(hotel_core STATIC
+set(HOTEL_CORE_SOURCES
+    # Configuracion y nucleo
     src/config/AppConfig.cpp
     src/core/Exceptions.cpp
     src/core/Logger.cpp
     src/core/ErrorMapper.cpp
     src/core/AppContext.cpp
+
+    # Base de datos (mongocxx::instance + mongocxx::pool)
     src/database/MongoConnectionManager.cpp
+
+    # Dominio y validadores
     src/models/Enums.cpp
     src/validators/InputValidators.cpp
+
+    # Repositorios BSON
     src/repositories/RepositoryCommon.cpp
     src/repositories/HuespedRepository.cpp
     src/repositories/HabitacionRepository.cpp
     src/repositories/ReservacionRepository.cpp
+
+    # Servicios de negocio
     src/services/HuespedService.cpp
     src/services/HabitacionService.cpp
     src/services/RoomLockManager.cpp
     src/services/ReservacionService.cpp
     src/services/DisponibilidadService.cpp
     src/services/ReporteService.cpp
+
+    # DTOs y mappers JSON
     src/dto/JsonHelpers.cpp
     src/dto/DtoMappers.cpp
+
+    # Controladores REST Drogon
     src/controllers/HealthController.cpp
     src/controllers/HuespedController.cpp
     src/controllers/HabitacionController.cpp
     src/controllers/ReservacionController.cpp
+    src/controllers/DisponibilidadController.cpp
+    src/controllers/ReporteController.cpp
 )
+
+add_library(hotel_core STATIC ${HOTEL_CORE_SOURCES})
 
 target_include_directories(hotel_core
     PUBLIC
@@ -66,7 +83,7 @@ target_link_libraries(hotel_core
         mongo::mongocxx_shared
 )
 
-# Ejecutable principal
+# Ejecutable principal de la API REST
 add_executable(hotel_api
     src/main.cpp
 )
