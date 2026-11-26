@@ -1,0 +1,65 @@
+# ==============================================================================
+# Secretos y configuraciones locales (NUNCA subir a Git)
+# ==============================================================================
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+backend/config/drogon.config.json
+*.pem
+*.key
+*.crt
+
+# ==============================================================================
+# Backend C++ / CMake / vcpkg / MSVC (Windows)
+# ==============================================================================
+backend/build/
+backend/out/
+backend/vcpkg_installed/
+build/
+out/
+vcpkg_installed/
+CMakeUserPresets.json
+.cmake/
+*.obj
+*.o
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+*.suo
+*.user
+*.sln.docstates
+.vs/
+
+# ==============================================================================
+# Frontend (Node / Vite / TypeScript)
+# ==============================================================================
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ==============================================================================
+# Logs, IDEs y sistema operativo
+# ==============================================================================
+*.log
+logs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store
