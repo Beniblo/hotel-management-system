@@ -40,6 +40,10 @@ add_library(hotel_core STATIC
     src/repositories/ReservacionRepository.cpp
     src/services/HuespedService.cpp
     src/services/HabitacionService.cpp
+    src/services/RoomLockManager.cpp
+    src/services/ReservacionService.cpp
+    src/services/DisponibilidadService.cpp
+    src/services/ReporteService.cpp
 )
 
 target_include_directories(hotel_core
