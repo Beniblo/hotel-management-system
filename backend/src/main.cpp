@@ -16,6 +16,7 @@
 #include "hotel/core/ErrorMapper.hpp"
 #include "hotel/core/Exceptions.hpp"
 #include "hotel/core/Logger.hpp"
+#include "hotel/middleware/SecurityMiddleware.hpp"
 
 namespace {
 
@@ -42,6 +43,7 @@ int main() {
     using hotel::core::ErrorMapper;
     using hotel::core::Logger;
     using hotel::core::NotFoundException;
+    using hotel::middleware::SecurityMiddleware;
 
     try {
         // 1. Cargar y validar configuracion segura (fail-fast)
@@ -65,12 +67,14 @@ int main() {
                          "]: el servidor iniciara y /api/v1/health reportara HTTP 503.");
         }
 
-        // 4. Configurar servidor Drogon y registrar el 100% de controladores REST
+        // 4. Configurar servidor Drogon, middleware de seguridad y controladores REST
         auto& app = drogon::app();
         app.setLogLevel(toTrantorLogLevel(config.logLevel));
         app.setThreadNum(4);
         app.setClientMaxBodySize(1024 * 1024);  // Limite de 1 MB por solicitud (OWASP API4)
         app.addListener(config.serverHost, config.serverPort);
+
+        SecurityMiddleware::registerAll(app, config);
 
         auto notFoundResp = ErrorMapper::toHttpResponse(
             NotFoundException("La ruta solicitada no existe en la API.", "ROUTE_NOT_FOUND"),

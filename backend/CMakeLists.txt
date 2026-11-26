@@ -60,6 +60,9 @@ set(HOTEL_CORE_SOURCES
     src/dto/JsonHelpers.cpp
     src/dto/DtoMappers.cpp
 
+    # Middleware y seguridad HTTP
+    src/middleware/SecurityMiddleware.cpp
+
     # Controladores REST Drogon
     src/controllers/HealthController.cpp
     src/controllers/HuespedController.cpp
