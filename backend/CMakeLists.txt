@@ -96,4 +96,26 @@ target_link_libraries(hotel_api
         hotel_core
 )
 
+# Pruebas automatizadas con GoogleTest + CTest
 enable_testing()
+include(GoogleTest)
+
+set(TESTS_UNIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../tests/backend/unit")
+
+add_executable(hotel_unit_tests
+    ${TESTS_UNIT_DIR}/ValidatorsTest.cpp
+    ${TESTS_UNIT_DIR}/OverlapsAndTotalsTest.cpp
+    ${TESTS_UNIT_DIR}/ExceptionsAndDtoTest.cpp
+)
+
+target_link_libraries(hotel_unit_tests
+    PRIVATE
+        hotel_core
+        GTest::gtest
+        GTest::gtest_main
+)
+
+gtest_discover_tests(hotel_unit_tests
+    DISCOVERY_MODE PRE_TEST
+    PROPERTIES LABELS "unit"
+)
