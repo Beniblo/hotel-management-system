@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import DashboardView from '@/views/DashboardView.vue';
 import HuespedesView from '@/views/HuespedesView.vue';
+import HabitacionesView from '@/views/HabitacionesView.vue';
+import DisponibilidadView from '@/views/DisponibilidadView.vue';
 import PlaceholderView from '@/views/PlaceholderView.vue';
 
 const routes: RouteRecordRaw[] = [
@@ -19,7 +21,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/habitaciones',
     name: 'habitaciones',
-    component: PlaceholderView,
+    component: HabitacionesView,
     meta: { title: 'Habitaciones' },
   },
   {
@@ -31,7 +33,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/disponibilidad',
     name: 'disponibilidad',
-    component: PlaceholderView,
+    component: DisponibilidadView,
     meta: { title: 'Disponibilidad' },
   },
   {
