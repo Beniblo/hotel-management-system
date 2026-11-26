@@ -1,0 +1,196 @@
+{
+  "info": {
+    "name": "Hotel Management System API (C++ / Drogon)",
+    "description": "Colección de pruebas REST v1 para Huéspedes, Habitaciones, Reservaciones, Disponibilidad y Reportes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8080/api/v1" },
+    { "key": "huespedId", "value": "" },
+    { "key": "habitacionId", "value": "" },
+    { "key": "reservacionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01. Salud",
+      "item": [
+        {
+          "name": "GET Health",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Huéspedes",
+      "item": [
+        {
+          "name": "GET Listar Huéspedes",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/huespedes?page=1&limit=20"
+          }
+        },
+        {
+          "name": "POST Crear Huésped",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Laura Demo\",\n  \"correo\": \"laura.demo@ejemplo.com\",\n  \"telefono\": \"4775551234\",\n  \"preferencias\": [\"piso alto\", \"no fumar\"]\n}"
+            },
+            "url": "{{baseUrl}}/huespedes"
+          }
+        },
+        {
+          "name": "GET Detalle Huésped",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/huespedes/{{huespedId}}"
+          }
+        },
+        {
+          "name": "PATCH Actualizar Huésped",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telefono\": \"4775559999\"\n}"
+            },
+            "url": "{{baseUrl}}/huespedes/{{huespedId}}"
+          }
+        },
+        {
+          "name": "DELETE Baja Lógica Huésped",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/huespedes/{{huespedId}}"
+          }
+        },
+        {
+          "name": "DELETE Eliminación Física Controlada Huésped",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/huespedes/{{huespedId}}?fisico=true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Habitaciones",
+      "item": [
+        {
+          "name": "GET Listar Habitaciones",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/habitaciones?page=1&limit=20"
+          }
+        },
+        {
+          "name": "POST Crear Habitación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"numero\": \"301\",\n  \"tipo\": \"doble\",\n  \"capacidad\": 2,\n  \"tarifa\": 1550.0,\n  \"servicios\": [\"wifi\", \"tv\", \"aire_acondicionado\"]\n}"
+            },
+            "url": "{{baseUrl}}/habitaciones"
+          }
+        },
+        {
+          "name": "PATCH Cambiar Estado Operativo",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"mantenimiento\"\n}"
+            },
+            "url": "{{baseUrl}}/habitaciones/{{habitacionId}}/estado"
+          }
+        },
+        {
+          "name": "DELETE Eliminar Habitación",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/habitaciones/{{habitacionId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Reservaciones",
+      "item": [
+        {
+          "name": "GET Listar Reservaciones",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reservaciones?page=1&limit=20"
+          }
+        },
+        {
+          "name": "POST Crear Reservación",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"huespedId\": \"{{huespedId}}\",\n  \"habitacionId\": \"{{habitacionId}}\",\n  \"fechaEntrada\": \"2027-04-10\",\n  \"fechaSalida\": \"2027-04-13\",\n  \"personas\": 2,\n  \"estado\": \"confirmada\"\n}"
+            },
+            "url": "{{baseUrl}}/reservaciones"
+          }
+        },
+        {
+          "name": "PATCH Modificar Reservación",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fechaSalida\": \"2027-04-14\"\n}"
+            },
+            "url": "{{baseUrl}}/reservaciones/{{reservacionId}}"
+          }
+        },
+        {
+          "name": "POST Cancelar Reservación",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/reservaciones/{{reservacionId}}/cancelar"
+          }
+        },
+        {
+          "name": "DELETE Eliminar Reservación",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/reservaciones/{{reservacionId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Disponibilidad y Reportes",
+      "item": [
+        {
+          "name": "GET Consultar Disponibilidad",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/disponibilidad?fechaEntrada=2026-12-06&fechaSalida=2026-12-08&personas=2"
+          }
+        },
+        {
+          "name": "GET Reporte Administrativo Resumen",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/reportes/resumen?fechaInicio=2026-12-01&fechaFin=2026-12-31"
+          }
+        }
+      ]
+    }
+  ]
+}
