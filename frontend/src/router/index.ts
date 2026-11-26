@@ -1,17 +1,19 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import DashboardView from '@/views/DashboardView.vue';
+import HuespedesView from '@/views/HuespedesView.vue';
 import PlaceholderView from '@/views/PlaceholderView.vue';
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'dashboard',
-    component: PlaceholderView,
+    component: DashboardView,
     meta: { title: 'Dashboard' },
   },
   {
     path: '/huespedes',
     name: 'huespedes',
-    component: PlaceholderView,
+    component: HuespedesView,
     meta: { title: 'Huéspedes' },
   },
   {
@@ -52,7 +54,9 @@ export const router = createRouter({
 });
 
 router.afterEach((to) => {
-  const pageTitle = to.meta.title ? `${String(to.meta.title)} | Hotel Management` : 'Hotel Management';
+  const pageTitle = to.meta.title
+    ? `${String(to.meta.title)} | Hotel Management`
+    : 'Hotel Management';
   document.title = pageTitle;
 });
 
