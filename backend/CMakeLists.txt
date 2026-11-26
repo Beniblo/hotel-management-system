@@ -5,7 +5,7 @@ project(hotel_backend
     LANGUAGES CXX
 )
 
-# Estandar C++20 (con respaldo previsto a C++17 si fuera necesario)
+# Estandar C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -20,27 +20,40 @@ if(MSVC)
     )
 endif()
 
-# Dependencias gestionadas automaticamente por vcpkg
+# Dependencias gestionadas por vcpkg
 find_package(Drogon CONFIG REQUIRED)
 find_package(bsoncxx CONFIG REQUIRED)
 find_package(mongocxx CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 
-# Ejecutable principal (smoke build inicial en Fase 2A)
+# Libreria interna del backend (reutilizable en hotel_api y pruebas GoogleTest)
+add_library(hotel_core STATIC
+    src/config/AppConfig.cpp
+    src/core/Exceptions.cpp
+    src/core/Logger.cpp
+    src/database/MongoConnectionManager.cpp
+)
+
+target_include_directories(hotel_core
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(hotel_core
+    PUBLIC
+        Drogon::Drogon
+        mongo::bsoncxx_shared
+        mongo::mongocxx_shared
+)
+
+# Ejecutable principal
 add_executable(hotel_api
     src/main.cpp
 )
 
-target_include_directories(hotel_api
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
 target_link_libraries(hotel_api
     PRIVATE
-        Drogon::Drogon
-        mongo::bsoncxx_shared
-        mongo::mongocxx_shared
+        hotel_core
 )
 
 enable_testing()
