@@ -101,6 +101,7 @@ enable_testing()
 include(GoogleTest)
 
 set(TESTS_UNIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../tests/backend/unit")
+set(TESTS_INTEGRATION_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../tests/backend/integration")
 
 add_executable(hotel_unit_tests
     ${TESTS_UNIT_DIR}/ValidatorsTest.cpp
@@ -118,4 +119,22 @@ target_link_libraries(hotel_unit_tests
 gtest_discover_tests(hotel_unit_tests
     DISCOVERY_MODE PRE_TEST
     PROPERTIES LABELS "unit"
+)
+
+add_executable(hotel_integration_tests
+    ${TESTS_INTEGRATION_DIR}/CrudAndIndexesIntegrationTest.cpp
+    ${TESTS_INTEGRATION_DIR}/ReservationsAvailabilityReportsIntegrationTest.cpp
+)
+
+target_link_libraries(hotel_integration_tests
+    PRIVATE
+        hotel_core
+        GTest::gtest
+        GTest::gtest_main
+)
+
+gtest_discover_tests(hotel_integration_tests
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    DISCOVERY_MODE PRE_TEST
+    PROPERTIES LABELS "integration"
 )
