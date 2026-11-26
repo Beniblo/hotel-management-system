@@ -1,110 +1,91 @@
-#include <chrono>
 #include <exception>
-#include <stdexcept>
+#include <memory>
 #include <string>
 
-#include <json/json.h>
+#include <drogon/drogon.h>
+#include <trantor/utils/Logger.h>
 
 #include "hotel/config/AppConfig.hpp"
+#include "hotel/controllers/HealthController.hpp"
+#include "hotel/controllers/HuespedController.hpp"
+#include "hotel/core/AppContext.hpp"
 #include "hotel/core/ErrorMapper.hpp"
 #include "hotel/core/Exceptions.hpp"
 #include "hotel/core/Logger.hpp"
-#include "hotel/dto/DtoMappers.hpp"
-#include "hotel/dto/JsonHelpers.hpp"
+
+namespace {
+
+trantor::Logger::LogLevel toTrantorLogLevel(const std::string& level) {
+    if (level == "TRACE") return trantor::Logger::kTrace;
+    if (level == "DEBUG") return trantor::Logger::kDebug;
+    if (level == "WARN")  return trantor::Logger::kWarn;
+    if (level == "ERROR") return trantor::Logger::kError;
+    return trantor::Logger::kInfo;
+}
+
+}  // namespace
 
 int main() {
     using hotel::config::AppConfig;
+    using hotel::controllers::HealthController;
+    using hotel::controllers::HuespedController;
+    using hotel::core::AppContext;
+    using hotel::core::AppException;
     using hotel::core::ErrorMapper;
     using hotel::core::Logger;
-    using hotel::core::ValidationException;
+    using hotel::core::NotFoundException;
 
     try {
+        // 1. Cargar y validar configuracion segura (fail-fast)
         const AppConfig config = AppConfig::load();
         Logger::setLevelFromString(config.logLevel);
 
-        Logger::info("Iniciando verificacion de DTOs, mappers JSON y ErrorMapper (Parte 5A)...");
+        Logger::info("Iniciando API REST Hotel Management System (Drogon " +
+                     std::string(drogon::getVersion()) + ")...");
 
-        // 1. Verificar parseo DTO de huesped y rechazo de inyeccion NoSQL en campo string
-        Json::Value validGuest(Json::objectValue);
-        validGuest["nombre"] = "Elena Torres";
-        validGuest["correo"] = "elena.torres@ejemplo.com";
-        validGuest["telefono"] = "4771234567";
-        validGuest["preferencias"] = Json::Value(Json::arrayValue);
-        validGuest["preferencias"].append("cama king");
+        // 2. Construir contenedor de dependencias (pool mongocxx, repositorios y servicios)
+        AppContext context(config);
 
-        const auto parsedGuest = hotel::dto::parseCreateHuespedDto(validGuest);
-        if (parsedGuest.nombre != "Elena Torres" || parsedGuest.preferencias.size() != 1) {
-            throw std::runtime_error("parseCreateHuespedDto no devolvio los valores esperados.");
-        }
-
-        Json::Value nosqlAttack(Json::objectValue);
-        nosqlAttack["nombre"] = "Atacante";
-        nosqlAttack["correo"] = Json::Value(Json::objectValue);
-        nosqlAttack["correo"]["$ne"] = "";
-        nosqlAttack["telefono"] = "4770000000";
-
-        bool attackBlocked = false;
+        // 3. Verificacion inicial de conectividad con MongoDB Atlas (sin exponer secretos)
         try {
-            static_cast<void>(hotel::dto::parseCreateHuespedDto(nosqlAttack));
-        } catch (const ValidationException& ex) {
-            const auto resp = ErrorMapper::toHttpResponse(ex, "req-test-422");
-            attackBlocked = (resp->statusCode() == drogon::k422UnprocessableEntity &&
-                             resp->getHeader("X-Request-Id") == "req-test-422");
-            Logger::info("[Seguridad/DTO] Payload NoSQL bloqueado OK -> HTTP 422 [" +
-                         ex.errorCode() + "]");
-        }
-        if (!attackBlocked) {
-            throw std::runtime_error("No se bloqueo un objeto NoSQL inyectado en correo.");
+            if (context.dbManager().ping()) {
+                Logger::info("[OK] Conexion inicial con MongoDB Atlas verificada (base '" +
+                             config.mongodbDbName + "').");
+            }
+        } catch (const AppException& ex) {
+            Logger::warn("Atlas no respondio en el ping inicial [" + ex.errorCode() +
+                         "]: el servidor iniciara y /api/v1/health reportara HTTP 503.");
         }
 
-        // 2. Verificar proteccion BOPLA en reservaciones (ignora total/tarifaAplicada inyectados)
-        Json::Value resBody(Json::objectValue);
-        resBody["huespedId"] = "65a000000000000000000001";
-        resBody["habitacionId"] = "65a000000000000000000002";
-        resBody["fechaEntrada"] = "2026-12-10";
-        resBody["fechaSalida"] = "2026-12-12";
-        resBody["personas"] = 2;
-        resBody["total"] = 0.01;  // Campo interno ignorado por el DTO
+        // 4. Registrar controladores con inyeccion de dependencias
+        auto& app = drogon::app();
+        app.setLogLevel(toTrantorLogLevel(config.logLevel));
+        app.setThreadNum(4);
+        app.setClientMaxBodySize(1024 * 1024);  // Limite de 1 MB por solicitud (OWASP API4)
+        app.addListener(config.serverHost, config.serverPort);
 
-        const auto parsedRes = hotel::dto::parseCreateReservacionDto(resBody);
-        if (parsedRes.personas != 2 || parsedRes.fechaEntrada != "2026-12-10") {
-            throw std::runtime_error("parseCreateReservacionDto fallo.");
-        }
+        auto notFoundResp = ErrorMapper::toHttpResponse(
+            NotFoundException("La ruta solicitada no existe en la API.", "ROUTE_NOT_FOUND"),
+            "route-not-found");
+        app.setCustom404Page(notFoundResp);
 
-        // 3. Verificar serializacion JSON de lista paginada vacia ([] garantizado) y health
-        hotel::repositories::PagedResult<hotel::models::Huesped> emptyPage;
-        emptyPage.page = 1;
-        emptyPage.limit = 20;
-        emptyPage.total = 0;
+        app.registerController(std::make_shared<HealthController>(context.dbManager()));
+        app.registerController(std::make_shared<HuespedController>(context.huespedService()));
 
-        const Json::Value emptyJson = hotel::dto::toJson(emptyPage);
-        if (!emptyJson["data"].isArray() || !emptyJson["data"].empty() ||
-            emptyJson["meta"]["totalPages"].asInt64() != 0) {
-            throw std::runtime_error("La lista paginada vacia no serializo data como [].");
-        }
+        Logger::info("Servidor HTTP Drogon escuchando en http://" + config.serverHost + ":" +
+                     std::to_string(config.serverPort) + "/api/v1");
+        Logger::info("Presiona Ctrl + C para detener el servidor.");
 
-        const Json::Value healthJson = hotel::dto::buildHealthJson(true, config.mongodbDbName);
-        if (healthJson["status"].asString() != "ok" ||
-            healthJson["database"]["name"].asString() != "HotelDB") {
-            throw std::runtime_error("buildHealthJson no devolvio la estructura esperada.");
-        }
-
-        // 4. Verificar traduccion segura de excepciones no controladas a HTTP 500
-        drogon::HttpResponsePtr safe500;
-        try {
-            throw std::runtime_error("Fallo interno con URI mongodb+srv://user:pass@cluster.net/");
-        } catch (...) {
-            safe500 = ErrorMapper::fromCurrentException("req-test-500");
-        }
-        if (!safe500 || safe500->statusCode() != drogon::k500InternalServerError) {
-            throw std::runtime_error("ErrorMapper::fromCurrentException no devolvio HTTP 500.");
-        }
-
-        Logger::info("[ErrorMapper] Excepcion interna traducida de forma segura -> HTTP 500.");
-        Logger::info("[OK] Parte 5A verificada correctamente (DTOs, mappers JSON y ErrorMapper listos).");
+        // 5. Iniciar bucle principal HTTP (bloqueante hasta senal de cierre)
+        app.run();
         return 0;
+    } catch (const AppException& ex) {
+        Logger::error("Error de configuracion/inicio -> HTTP " +
+                      std::to_string(ex.httpStatus()) + " [" + ex.errorCode() + "]: " +
+                      ex.publicMessage());
+        return 1;
     } catch (const std::exception& ex) {
-        Logger::error(std::string("Fallo critico en Parte 5A: ") + ex.what());
+        Logger::error(std::string("Fallo critico al iniciar el servidor: ") + ex.what());
         return 1;
     }
 }

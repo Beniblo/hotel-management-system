@@ -32,6 +32,7 @@ add_library(hotel_core STATIC
     src/core/Exceptions.cpp
     src/core/Logger.cpp
     src/core/ErrorMapper.cpp
+    src/core/AppContext.cpp
     src/database/MongoConnectionManager.cpp
     src/models/Enums.cpp
     src/validators/InputValidators.cpp
@@ -47,6 +48,8 @@ add_library(hotel_core STATIC
     src/services/ReporteService.cpp
     src/dto/JsonHelpers.cpp
     src/dto/DtoMappers.cpp
+    src/controllers/HealthController.cpp
+    src/controllers/HuespedController.cpp
 )
 
 target_include_directories(hotel_core
