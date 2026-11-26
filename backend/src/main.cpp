@@ -6,8 +6,10 @@
 #include <trantor/utils/Logger.h>
 
 #include "hotel/config/AppConfig.hpp"
+#include "hotel/controllers/HabitacionController.hpp"
 #include "hotel/controllers/HealthController.hpp"
 #include "hotel/controllers/HuespedController.hpp"
+#include "hotel/controllers/ReservacionController.hpp"
 #include "hotel/core/AppContext.hpp"
 #include "hotel/core/ErrorMapper.hpp"
 #include "hotel/core/Exceptions.hpp"
@@ -27,8 +29,10 @@ trantor::Logger::LogLevel toTrantorLogLevel(const std::string& level) {
 
 int main() {
     using hotel::config::AppConfig;
+    using hotel::controllers::HabitacionController;
     using hotel::controllers::HealthController;
     using hotel::controllers::HuespedController;
+    using hotel::controllers::ReservacionController;
     using hotel::core::AppContext;
     using hotel::core::AppException;
     using hotel::core::ErrorMapper;
@@ -71,6 +75,9 @@ int main() {
 
         app.registerController(std::make_shared<HealthController>(context.dbManager()));
         app.registerController(std::make_shared<HuespedController>(context.huespedService()));
+        app.registerController(std::make_shared<HabitacionController>(context.habitacionService()));
+        app.registerController(
+            std::make_shared<ReservacionController>(context.reservacionService()));
 
         Logger::info("Servidor HTTP Drogon escuchando en http://" + config.serverHost + ":" +
                      std::to_string(config.serverPort) + "/api/v1");

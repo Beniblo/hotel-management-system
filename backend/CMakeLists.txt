@@ -50,6 +50,8 @@ add_library(hotel_core STATIC
     src/dto/DtoMappers.cpp
     src/controllers/HealthController.cpp
     src/controllers/HuespedController.cpp
+    src/controllers/HabitacionController.cpp
+    src/controllers/ReservacionController.cpp
 )
 
 target_include_directories(hotel_core
