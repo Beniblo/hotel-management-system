@@ -32,6 +32,8 @@ add_library(hotel_core STATIC
     src/core/Exceptions.cpp
     src/core/Logger.cpp
     src/database/MongoConnectionManager.cpp
+    src/models/Enums.cpp
+    src/validators/InputValidators.cpp
 )
 
 target_include_directories(hotel_core
