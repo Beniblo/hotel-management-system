@@ -1,5 +1,6 @@
 #include <chrono>
 #include <exception>
+#include <stdexcept>
 #include <string>
 
 #include "hotel/config/AppConfig.hpp"
@@ -8,132 +9,134 @@
 #include "hotel/database/MongoConnectionManager.hpp"
 #include "hotel/repositories/HabitacionRepository.hpp"
 #include "hotel/repositories/HuespedRepository.hpp"
+#include "hotel/repositories/ReservacionRepository.hpp"
 
 int main() {
     using hotel::config::AppConfig;
     using hotel::core::AppException;
-    using hotel::core::ConflictException;
     using hotel::core::Logger;
     using hotel::database::MongoConnectionManager;
-    using hotel::models::EstadoHabitacion;
-    using hotel::models::Habitacion;
-    using hotel::models::Huesped;
-    using hotel::repositories::HabitacionFilter;
+    using hotel::models::EstadoReservacion;
+    using hotel::models::Reservacion;
     using hotel::repositories::HabitacionRepository;
-    using hotel::repositories::HuespedFilter;
     using hotel::repositories::HuespedRepository;
+    using hotel::repositories::ReservacionFilter;
+    using hotel::repositories::ReservacionRepository;
 
-    std::string tempHuespedId;
-    std::string tempHabitacionId;
+    std::string tempReservacionId;
 
     try {
         const AppConfig config = AppConfig::load();
         Logger::setLevelFromString(config.logLevel);
 
-        Logger::info("Iniciando verificacion CRUD de repositorios contra Atlas (Parte 4B)...");
+        Logger::info("Iniciando verificacion de ReservacionRepository contra Atlas (Parte 4C)...");
 
         MongoConnectionManager dbManager(config);
         HuespedRepository huespedRepo(dbManager);
         HabitacionRepository habitacionRepo(dbManager);
+        ReservacionRepository reservacionRepo(dbManager);
 
+        // 1. Obtener entidades semilla existentes en HotelDB
+        const auto ana = huespedRepo.findByEmail("ana.lopez@ejemplo.com");
+        const auto hab101 = habitacionRepo.findByNumero("101");
+        const auto hab102 = habitacionRepo.findByNumero("102");
+        if (!ana.has_value() || !hab101.has_value() || !hab102.has_value()) {
+            throw std::runtime_error(
+                "No se encontraron los datos semilla esperados (ana.lopez@ejemplo.com, hab 101 y 102).");
+        }
+
+        // 2. Verificar consulta de traslapes sobre la reservacion semilla (hab 102: 2026-12-05 a 2026-12-08)
+        const bool traslapeDetectado = reservacionRepo.hasOverlappingBlockingReservation(
+            hab102->id, "2026-12-06", "2026-12-09");
+        const bool bordeLibre = !reservacionRepo.hasOverlappingBlockingReservation(
+            hab102->id, "2026-12-08", "2026-12-10");
+        if (!traslapeDetectado || !bordeLibre) {
+            throw std::runtime_error("Fallo la verificacion de traslape/borde en hab 102.");
+        }
+        Logger::info("[Traslapes] Hab 102 (2026-12-06..09): bloqueada | Borde (2026-12-08..10): libre.");
+
+        // 3. Verificar findBlockedHabitacionIds y findIntersectingPeriod
+        const auto blockedIds = reservacionRepo.findBlockedHabitacionIds("2026-12-06", "2026-12-07");
+        if (blockedIds.find(hab102->id) == blockedIds.end()) {
+            throw std::runtime_error("findBlockedHabitacionIds no incluyo la habitacion 102.");
+        }
+
+        const auto periodoDic = reservacionRepo.findIntersectingPeriod("2026-12-01", "2026-12-31");
+        if (periodoDic.empty()) {
+            throw std::runtime_error("findIntersectingPeriod no devolvio la reservacion semilla.");
+        }
+        Logger::info("[Consultas] Habitaciones bloqueadas (dic 06-07): " +
+                     std::to_string(blockedIds.size()) +
+                     " | Reservaciones en dic 2026: " + std::to_string(periodoDic.size()));
+
+        // 4. Ciclo CRUD completo y autolimpiable en hab 101
         const auto now = std::chrono::system_clock::now();
+        Reservacion nueva;
+        nueva.huespedId = ana->id;
+        nueva.habitacionId = hab101->id;
+        nueva.fechaEntrada = "2027-01-10";
+        nueva.fechaSalida = "2027-01-13";
+        nueva.noches = 3;
+        nueva.personas = 1;
+        nueva.estado = EstadoReservacion::Confirmada;
+        nueva.tarifaAplicada = hab101->tarifa;
+        nueva.total = hab101->tarifa * 3.0;
+        nueva.creadoEn = now;
+        nueva.actualizadoEn = now;
 
-        // 1. Verificar ciclo CRUD + indice unico E11000 en huespedes
-        Huesped h;
-        h.nombre = "Huesped Prueba 4B";
-        h.correo = "prueba.4b@ejemplo.com";
-        h.telefono = "4779990042";
-        h.fechaRegistro = now;
-        h.preferencias = {"vista jardin"};
-        h.activo = true;
-        h.actualizadoEn = now;
+        const auto creada = reservacionRepo.create(nueva);
+        tempReservacionId = creada.id;
+        Logger::info("[Reservaciones] insert_one OK -> id=" + tempReservacionId);
 
-        const auto createdH = huespedRepo.create(h);
-        tempHuespedId = createdH.id;
-        Logger::info("[Huespedes] insert_one OK -> id=" + tempHuespedId);
-
-        const auto foundH = huespedRepo.findById(tempHuespedId);
-        if (!foundH.has_value() || foundH->correo != "prueba.4b@ejemplo.com") {
-            throw std::runtime_error("findById en huespedes no devolvio el registro esperado.");
+        const auto leida = reservacionRepo.findById(tempReservacionId);
+        if (!leida.has_value() || leida->noches != 3 || leida->fechaEntrada != "2027-01-10") {
+            throw std::runtime_error("findById no devolvio los datos esperados.");
         }
 
-        // Probar rechazo por indice unico ux_huespedes_correo (E11000 -> HTTP 409)
-        bool duplicateEmailRejected = false;
-        try {
-            static_cast<void>(huespedRepo.create(h));
-        } catch (const ConflictException& ex) {
-            duplicateEmailRejected = (ex.httpStatus() == 409);
-            Logger::info("[Huespedes] Duplicado E11000 capturado OK -> HTTP " +
-                         std::to_string(ex.httpStatus()) + " [" + ex.errorCode() + "]");
-        }
-        if (!duplicateEmailRejected) {
-            throw std::runtime_error("El indice unico de correo no rechazo el duplicado.");
+        // Excluir el propio ID al simular reprogramacion
+        if (reservacionRepo.hasOverlappingBlockingReservation(
+                hab101->id, "2027-01-10", "2027-01-13", tempReservacionId)) {
+            throw std::runtime_error("hasOverlappingBlockingReservation fallo al excluir el propio ID.");
         }
 
-        Huesped updatedH = *foundH;
-        updatedH.telefono = "4779990099";
-        updatedH.actualizadoEn = std::chrono::system_clock::now();
-        if (!huespedRepo.update(updatedH).has_value()) {
-            throw std::runtime_error("update en huespedes fallo.");
+        // Cancelar y comprobar que ya no bloquea
+        if (!reservacionRepo.updateEstado(
+                tempReservacionId, EstadoReservacion::Cancelada, std::chrono::system_clock::now())) {
+            throw std::runtime_error("updateEstado a Cancelada fallo.");
+        }
+        if (reservacionRepo.hasOverlappingBlockingReservation(
+                hab101->id, "2027-01-10", "2027-01-13")) {
+            throw std::runtime_error("Una reservacion cancelada no debe bloquear fechas.");
         }
 
-        const auto huespedesPage = huespedRepo.findAll(HuespedFilter{});
-        Logger::info("[Huespedes] findAll OK -> total=" + std::to_string(huespedesPage.total));
-
-        if (!huespedRepo.deleteById(tempHuespedId)) {
-            throw std::runtime_error("deleteById en huespedes fallo.");
-        }
-        tempHuespedId.clear();
-        Logger::info("[Huespedes] delete_one OK (limpieza verificada).");
-
-        // 2. Verificar ciclo CRUD + indice unico E11000 en habitaciones
-        Habitacion hab;
-        hab.numero = "999-4B";
-        hab.tipo = "doble";
-        hab.capacidad = 2;
-        hab.tarifa = 1550.50;
-        hab.estado = EstadoHabitacion::Disponible;
-        hab.servicios = {"wifi", "tv"};
-        hab.actualizadoEn = now;
-
-        const auto createdHab = habitacionRepo.create(hab);
-        tempHabitacionId = createdHab.id;
-        Logger::info("[Habitaciones] insert_one OK -> id=" + tempHabitacionId);
-
-        bool duplicateRoomRejected = false;
-        try {
-            static_cast<void>(habitacionRepo.create(hab));
-        } catch (const ConflictException& ex) {
-            duplicateRoomRejected = (ex.httpStatus() == 409);
-            Logger::info("[Habitaciones] Duplicado E11000 capturado OK -> HTTP " +
-                         std::to_string(ex.httpStatus()) + " [" + ex.errorCode() + "]");
-        }
-        if (!duplicateRoomRejected) {
-            throw std::runtime_error("El indice unico de numero de habitacion no rechazo el duplicado.");
+        ReservacionFilter filtro;
+        filtro.habitacionId = hab101->id;
+        filtro.estado = EstadoReservacion::Cancelada;
+        const auto filtradas = reservacionRepo.findAll(filtro);
+        if (filtradas.total < 1) {
+            throw std::runtime_error("findAll con filtros combinados no encontro la reservacion.");
         }
 
-        if (!habitacionRepo.updateEstado(
-                tempHabitacionId, EstadoHabitacion::Mantenimiento, std::chrono::system_clock::now())) {
-            throw std::runtime_error("updateEstado en habitaciones fallo.");
+        const auto totalPorHuesped = reservacionRepo.countByHuespedId(ana->id);
+        const auto bloqueantesHab102 = reservacionRepo.countByHabitacionId(hab102->id, true);
+        Logger::info("[Conteos] Reservas de Ana: " + std::to_string(totalPorHuesped) +
+                     " | Bloqueantes en hab 102: " + std::to_string(bloqueantesHab102));
+
+        // Limpieza
+        if (!reservacionRepo.deleteById(tempReservacionId)) {
+            throw std::runtime_error("deleteById en reservaciones fallo.");
         }
+        tempReservacionId.clear();
+        Logger::info("[Reservaciones] delete_one OK (limpieza verificada).");
 
-        const auto habitacionesPage = habitacionRepo.findAll(HabitacionFilter{});
-        Logger::info("[Habitaciones] findAll OK -> total=" + std::to_string(habitacionesPage.total));
-
-        if (!habitacionRepo.deleteById(tempHabitacionId)) {
-            throw std::runtime_error("deleteById en habitaciones fallo.");
-        }
-        tempHabitacionId.clear();
-        Logger::info("[Habitaciones] delete_one OK (limpieza verificada).");
-
-        Logger::info("[OK] Parte 4B verificada correctamente (HuespedRepository y HabitacionRepository operativos).");
+        Logger::info("[OK] Parte 4C verificada correctamente (ReservacionRepository operativo).");
         return 0;
     } catch (const AppException& ex) {
         Logger::error("Error controlado -> HTTP " + std::to_string(ex.httpStatus()) +
                       " [" + ex.errorCode() + "]: " + ex.publicMessage());
         return 1;
     } catch (const std::exception& ex) {
-        Logger::error(std::string("Fallo critico en Parte 4B: ") + ex.what());
+        Logger::error(std::string("Fallo critico en Parte 4C: ") + ex.what());
         return 1;
     }
 }

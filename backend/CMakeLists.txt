@@ -37,6 +37,7 @@ add_library(hotel_core STATIC
     src/repositories/RepositoryCommon.cpp
     src/repositories/HuespedRepository.cpp
     src/repositories/HabitacionRepository.cpp
+    src/repositories/ReservacionRepository.cpp
 )
 
 target_include_directories(hotel_core
