@@ -34,6 +34,9 @@ add_library(hotel_core STATIC
     src/database/MongoConnectionManager.cpp
     src/models/Enums.cpp
     src/validators/InputValidators.cpp
+    src/repositories/RepositoryCommon.cpp
+    src/repositories/HuespedRepository.cpp
+    src/repositories/HabitacionRepository.cpp
 )
 
 target_include_directories(hotel_core
