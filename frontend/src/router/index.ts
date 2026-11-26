@@ -2,8 +2,10 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue';
 import HuespedesView from '@/views/HuespedesView.vue';
 import HabitacionesView from '@/views/HabitacionesView.vue';
+import ReservacionesView from '@/views/ReservacionesView.vue';
 import DisponibilidadView from '@/views/DisponibilidadView.vue';
-import PlaceholderView from '@/views/PlaceholderView.vue';
+import ReportesView from '@/views/ReportesView.vue';
+import NotFoundView from '@/views/NotFoundView.vue';
 
 const routes: RouteRecordRaw[] = [
   {
@@ -27,7 +29,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/reservaciones',
     name: 'reservaciones',
-    component: PlaceholderView,
+    component: ReservacionesView,
     meta: { title: 'Reservaciones' },
   },
   {
@@ -39,14 +41,14 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/reportes',
     name: 'reportes',
-    component: PlaceholderView,
+    component: ReportesView,
     meta: { title: 'Reportes' },
   },
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
-    component: PlaceholderView,
-    meta: { title: 'Página no encontrada (404)' },
+    component: NotFoundView,
+    meta: { title: 'Página no encontrada' },
   },
 ];
 
