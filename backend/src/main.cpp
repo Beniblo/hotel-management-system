@@ -1,4 +1,3 @@
-#include <chrono>
 #include <exception>
 #include <stdexcept>
 #include <string>
@@ -10,133 +9,166 @@
 #include "hotel/repositories/HabitacionRepository.hpp"
 #include "hotel/repositories/HuespedRepository.hpp"
 #include "hotel/repositories/ReservacionRepository.hpp"
+#include "hotel/services/HabitacionService.hpp"
+#include "hotel/services/HuespedService.hpp"
 
 int main() {
     using hotel::config::AppConfig;
     using hotel::core::AppException;
+    using hotel::core::ConflictException;
     using hotel::core::Logger;
     using hotel::database::MongoConnectionManager;
-    using hotel::models::EstadoReservacion;
-    using hotel::models::Reservacion;
+    using hotel::models::EstadoHabitacion;
     using hotel::repositories::HabitacionRepository;
     using hotel::repositories::HuespedRepository;
-    using hotel::repositories::ReservacionFilter;
     using hotel::repositories::ReservacionRepository;
-
-    std::string tempReservacionId;
+    using hotel::services::CreateHabitacionInput;
+    using hotel::services::CreateHuespedInput;
+    using hotel::services::HabitacionService;
+    using hotel::services::HuespedService;
+    using hotel::services::UpdateHabitacionInput;
+    using hotel::services::UpdateHuespedInput;
 
     try {
         const AppConfig config = AppConfig::load();
         Logger::setLevelFromString(config.logLevel);
 
-        Logger::info("Iniciando verificacion de ReservacionRepository contra Atlas (Parte 4C)...");
+        Logger::info("Iniciando verificacion de HuespedService y HabitacionService (Parte 4D)...");
 
         MongoConnectionManager dbManager(config);
         HuespedRepository huespedRepo(dbManager);
         HabitacionRepository habitacionRepo(dbManager);
         ReservacionRepository reservacionRepo(dbManager);
 
-        // 1. Obtener entidades semilla existentes en HotelDB
+        HuespedService huespedService(huespedRepo, reservacionRepo);
+        HabitacionService habitacionService(habitacionRepo, reservacionRepo);
+
+        // 1. Verificar reglas de HuespedService
+        CreateHuespedInput nuevoHuesped;
+        nuevoHuesped.nombre = "  Luis Prueba 4D  ";
+        nuevoHuesped.correo = "  LUIS.4D@Ejemplo.COM ";
+        nuevoHuesped.telefono = "477-555-0140";
+        nuevoHuesped.preferencias = {"piso bajo", "piso bajo", "vista ciudad"};
+
+        const auto creadoH = huespedService.crear(nuevoHuesped);
+        if (creadoH.correo != "luis.4d@ejemplo.com" || creadoH.preferencias.size() != 2) {
+            throw std::runtime_error("La normalizacion de huesped no funciono como se esperaba.");
+        }
+        Logger::info("[HuespedService] crear OK -> id=" + creadoH.id + ", correo=" + creadoH.correo);
+
+        // Probar rechazo de correo duplicado a nivel de servicio
+        bool dupEmailCaught = false;
+        try {
+            static_cast<void>(huespedService.crear(nuevoHuesped));
+        } catch (const ConflictException& ex) {
+            dupEmailCaught = (ex.httpStatus() == 409);
+        }
+        if (!dupEmailCaught) {
+            throw std::runtime_error("HuespedService no rechazo correo duplicado con 409.");
+        }
+
+        // Actualizacion parcial
+        UpdateHuespedInput patchH;
+        patchH.telefono = "477-555-0199";
+        const auto actualizadoH = huespedService.actualizar(creadoH.id, patchH);
+        if (actualizadoH.telefono != "477-555-0199") {
+            throw std::runtime_error("actualizar en HuespedService fallo.");
+        }
+
+        // Baja logica (activo = false)
+        const auto bajaLogica = huespedService.eliminar(creadoH.id, false);
+        if (bajaLogica.eliminacionFisica || !bajaLogica.huespedDesactivado.has_value() ||
+            bajaLogica.huespedDesactivado->activo) {
+            throw std::runtime_error("La baja logica de HuespedService no desactivo el registro.");
+        }
+        Logger::info("[HuespedService] baja logica OK -> activo=false");
+
+        // Eliminacion fisica controlada (sin reservaciones asociadas)
+        const auto bajaFisica = huespedService.eliminar(creadoH.id, true);
+        if (!bajaFisica.eliminacionFisica) {
+            throw std::runtime_error("La eliminacion fisica de HuespedService fallo.");
+        }
+        Logger::info("[HuespedService] eliminacion fisica controlada OK.");
+
+        // Verificar proteccion de integridad sobre Ana Lopez (tiene reservacion semilla activa)
         const auto ana = huespedRepo.findByEmail("ana.lopez@ejemplo.com");
-        const auto hab101 = habitacionRepo.findByNumero("101");
+        if (!ana.has_value()) {
+            throw std::runtime_error("No se encontro huesped semilla ana.lopez@ejemplo.com.");
+        }
+        bool anaProtected = false;
+        try {
+            static_cast<void>(huespedService.eliminar(ana->id, false));
+        } catch (const ConflictException& ex) {
+            anaProtected = (ex.httpStatus() == 409);
+            Logger::info("[HuespedService] Proteccion de huesped con reserva activa OK -> HTTP 409 [" +
+                         ex.errorCode() + "]");
+        }
+        if (!anaProtected) {
+            throw std::runtime_error("Se permitio desactivar un huesped con reservacion activa.");
+        }
+
+        // 2. Verificar reglas de HabitacionService
+        CreateHabitacionInput nuevaHab;
+        nuevaHab.numero = " 404-d ";
+        nuevaHab.tipo = "Suite";
+        nuevaHab.capacidad = 3;
+        nuevaHab.tarifa = 2199.996;
+        nuevaHab.servicios = {"wifi", "jacuzzi", "WIFI"};
+
+        const auto creadaHab = habitacionService.crear(nuevaHab);
+        if (creadaHab.numero != "404-D" || creadaHab.tipo != "suite" ||
+            creadaHab.tarifa != 2200.0 || creadaHab.servicios.size() != 2) {
+            throw std::runtime_error("La normalizacion de habitacion no funciono como se esperaba.");
+        }
+        Logger::info("[HabitacionService] crear OK -> numero=" + creadaHab.numero +
+                     ", tarifa=" + std::to_string(creadaHab.tarifa));
+
+        // Cambio rapido de estado
+        const auto enMant =
+            habitacionService.cambiarEstado(creadaHab.id, EstadoHabitacion::Mantenimiento);
+        if (enMant.estado != EstadoHabitacion::Mantenimiento) {
+            throw std::runtime_error("cambiarEstado en HabitacionService fallo.");
+        }
+
+        // Actualizacion parcial
+        UpdateHabitacionInput patchHab;
+        patchHab.tarifa = 2350.0;
+        patchHab.estado = EstadoHabitacion::Disponible;
+        const auto actualizadaHab = habitacionService.actualizar(creadaHab.id, patchHab);
+        if (actualizadaHab.tarifa != 2350.0 || actualizadaHab.estado != EstadoHabitacion::Disponible) {
+            throw std::runtime_error("actualizar en HabitacionService fallo.");
+        }
+
+        // Eliminacion fisica controlada (sin reservaciones)
+        habitacionService.eliminar(creadaHab.id);
+        Logger::info("[HabitacionService] cambiarEstado, actualizar y eliminar OK.");
+
+        // Verificar proteccion sobre habitacion 102 (tiene reservacion confirmada)
         const auto hab102 = habitacionRepo.findByNumero("102");
-        if (!ana.has_value() || !hab101.has_value() || !hab102.has_value()) {
-            throw std::runtime_error(
-                "No se encontraron los datos semilla esperados (ana.lopez@ejemplo.com, hab 101 y 102).");
+        if (!hab102.has_value()) {
+            throw std::runtime_error("No se encontro habitacion semilla 102.");
+        }
+        bool hab102StateProtected = false;
+        try {
+            static_cast<void>(
+                habitacionService.cambiarEstado(hab102->id, EstadoHabitacion::Mantenimiento));
+        } catch (const ConflictException& ex) {
+            hab102StateProtected = (ex.httpStatus() == 409);
+            Logger::info("[HabitacionService] Proteccion de estado en hab 102 OK -> HTTP 409 [" +
+                         ex.errorCode() + "]");
+        }
+        if (!hab102StateProtected) {
+            throw std::runtime_error("Se permitio poner en mantenimiento la hab 102 con reserva activa.");
         }
 
-        // 2. Verificar consulta de traslapes sobre la reservacion semilla (hab 102: 2026-12-05 a 2026-12-08)
-        const bool traslapeDetectado = reservacionRepo.hasOverlappingBlockingReservation(
-            hab102->id, "2026-12-06", "2026-12-09");
-        const bool bordeLibre = !reservacionRepo.hasOverlappingBlockingReservation(
-            hab102->id, "2026-12-08", "2026-12-10");
-        if (!traslapeDetectado || !bordeLibre) {
-            throw std::runtime_error("Fallo la verificacion de traslape/borde en hab 102.");
-        }
-        Logger::info("[Traslapes] Hab 102 (2026-12-06..09): bloqueada | Borde (2026-12-08..10): libre.");
-
-        // 3. Verificar findBlockedHabitacionIds y findIntersectingPeriod
-        const auto blockedIds = reservacionRepo.findBlockedHabitacionIds("2026-12-06", "2026-12-07");
-        if (blockedIds.find(hab102->id) == blockedIds.end()) {
-            throw std::runtime_error("findBlockedHabitacionIds no incluyo la habitacion 102.");
-        }
-
-        const auto periodoDic = reservacionRepo.findIntersectingPeriod("2026-12-01", "2026-12-31");
-        if (periodoDic.empty()) {
-            throw std::runtime_error("findIntersectingPeriod no devolvio la reservacion semilla.");
-        }
-        Logger::info("[Consultas] Habitaciones bloqueadas (dic 06-07): " +
-                     std::to_string(blockedIds.size()) +
-                     " | Reservaciones en dic 2026: " + std::to_string(periodoDic.size()));
-
-        // 4. Ciclo CRUD completo y autolimpiable en hab 101
-        const auto now = std::chrono::system_clock::now();
-        Reservacion nueva;
-        nueva.huespedId = ana->id;
-        nueva.habitacionId = hab101->id;
-        nueva.fechaEntrada = "2027-01-10";
-        nueva.fechaSalida = "2027-01-13";
-        nueva.noches = 3;
-        nueva.personas = 1;
-        nueva.estado = EstadoReservacion::Confirmada;
-        nueva.tarifaAplicada = hab101->tarifa;
-        nueva.total = hab101->tarifa * 3.0;
-        nueva.creadoEn = now;
-        nueva.actualizadoEn = now;
-
-        const auto creada = reservacionRepo.create(nueva);
-        tempReservacionId = creada.id;
-        Logger::info("[Reservaciones] insert_one OK -> id=" + tempReservacionId);
-
-        const auto leida = reservacionRepo.findById(tempReservacionId);
-        if (!leida.has_value() || leida->noches != 3 || leida->fechaEntrada != "2027-01-10") {
-            throw std::runtime_error("findById no devolvio los datos esperados.");
-        }
-
-        // Excluir el propio ID al simular reprogramacion
-        if (reservacionRepo.hasOverlappingBlockingReservation(
-                hab101->id, "2027-01-10", "2027-01-13", tempReservacionId)) {
-            throw std::runtime_error("hasOverlappingBlockingReservation fallo al excluir el propio ID.");
-        }
-
-        // Cancelar y comprobar que ya no bloquea
-        if (!reservacionRepo.updateEstado(
-                tempReservacionId, EstadoReservacion::Cancelada, std::chrono::system_clock::now())) {
-            throw std::runtime_error("updateEstado a Cancelada fallo.");
-        }
-        if (reservacionRepo.hasOverlappingBlockingReservation(
-                hab101->id, "2027-01-10", "2027-01-13")) {
-            throw std::runtime_error("Una reservacion cancelada no debe bloquear fechas.");
-        }
-
-        ReservacionFilter filtro;
-        filtro.habitacionId = hab101->id;
-        filtro.estado = EstadoReservacion::Cancelada;
-        const auto filtradas = reservacionRepo.findAll(filtro);
-        if (filtradas.total < 1) {
-            throw std::runtime_error("findAll con filtros combinados no encontro la reservacion.");
-        }
-
-        const auto totalPorHuesped = reservacionRepo.countByHuespedId(ana->id);
-        const auto bloqueantesHab102 = reservacionRepo.countByHabitacionId(hab102->id, true);
-        Logger::info("[Conteos] Reservas de Ana: " + std::to_string(totalPorHuesped) +
-                     " | Bloqueantes en hab 102: " + std::to_string(bloqueantesHab102));
-
-        // Limpieza
-        if (!reservacionRepo.deleteById(tempReservacionId)) {
-            throw std::runtime_error("deleteById en reservaciones fallo.");
-        }
-        tempReservacionId.clear();
-        Logger::info("[Reservaciones] delete_one OK (limpieza verificada).");
-
-        Logger::info("[OK] Parte 4C verificada correctamente (ReservacionRepository operativo).");
+        Logger::info("[OK] Parte 4D verificada correctamente (HuespedService y HabitacionService operativos).");
         return 0;
     } catch (const AppException& ex) {
         Logger::error("Error controlado -> HTTP " + std::to_string(ex.httpStatus()) +
                       " [" + ex.errorCode() + "]: " + ex.publicMessage());
         return 1;
     } catch (const std::exception& ex) {
-        Logger::error(std::string("Fallo critico en Parte 4C: ") + ex.what());
+        Logger::error(std::string("Fallo critico en Parte 4D: ") + ex.what());
         return 1;
     }
 }
